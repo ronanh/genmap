@@ -1,5 +1,7 @@
 # genmap
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/ronanh/genmap.svg)](https://pkg.go.dev/github.com/ronanh/genmap)
+
 Go native map only accept [comparable](https://go.dev/ref/spec#Comparison_operators) types as key.
 This prominently prevents the use of slices and maps as keys.
 
