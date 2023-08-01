@@ -15,7 +15,7 @@ func TestMap(t *testing.T) {
 		t.Errorf("expected empty map, got %d elements", m.Len())
 	}
 
-	m.Upsert("foo", func(val *int) {
+	m.Upsert("foo", func(val *int, exists bool) {
 		*val = 42
 	})
 	if m.Len() != 1 {
@@ -25,7 +25,7 @@ func TestMap(t *testing.T) {
 		t.Errorf("expected element with key 'foo' and value 42, got %v", elem)
 	}
 
-	m.Upsert("foo", func(val *int) {
+	m.Upsert("foo", func(val *int, exists bool) {
 		*val = 43
 	})
 	if m.Len() != 1 {
@@ -35,7 +35,7 @@ func TestMap(t *testing.T) {
 		t.Errorf("expected element with key 'foo' and value 43, got %v", elem)
 	}
 
-	m.Upsert("bar", func(val *int) {
+	m.Upsert("bar", func(val *int, exists bool) {
 		*val = 44
 	})
 	if m.Len() != 2 {
@@ -70,13 +70,13 @@ func TestMap(t *testing.T) {
 
 func TestMapGet(t *testing.T) {
 	m := genmap.NewMap[int, string](genmap.Equal[int], genmap.NewHasher[int]())
-	m.Upsert(1, func(val *string) {
+	m.Upsert(1, func(val *string, exists bool) {
 		*val = "one"
 	})
-	m.Upsert(2, func(val *string) {
+	m.Upsert(2, func(val *string, exists bool) {
 		*val = "two"
 	})
-	m.Upsert(3, func(val *string) {
+	m.Upsert(3, func(val *string, exists bool) {
 		*val = "three"
 	})
 
@@ -155,13 +155,13 @@ func TestMapPut(t *testing.T) {
 
 func TestMapUpsert(t *testing.T) {
 	m := genmap.NewMap[string, int](genmap.Equal[string], genmap.NewHasher[string]())
-	m.Upsert("a", func(val *int) {
+	m.Upsert("a", func(val *int, exists bool) {
 		*val = 1
 	})
-	m.Upsert("b", func(val *int) {
+	m.Upsert("b", func(val *int, exists bool) {
 		*val = 2
 	})
-	m.Upsert("c", func(val *int) {
+	m.Upsert("c", func(val *int, exists bool) {
 		*val = 3
 	})
 	if m.Len() != 3 {
@@ -176,7 +176,7 @@ func TestMapUpsert(t *testing.T) {
 	if val, ok := m.Get("c"); !ok || val != 3 {
 		t.Errorf("expected value 3 for key 'c', got %v", val)
 	}
-	m.Upsert("a", func(val *int) {
+	m.Upsert("a", func(val *int, exists bool) {
 		*val = 4
 	})
 	if val, ok := m.Get("a"); !ok || val != 4 {
@@ -233,7 +233,7 @@ func BenchmarkStdMapPutOverwrite(b *testing.B) {
 }
 
 func BenchmarkMapUpsert100k(b *testing.B) {
-	update := func(val *MyValue) {
+	update := func(val *MyValue, exists bool) {
 		val.v1++
 	}
 	b.ResetTimer()
@@ -259,7 +259,7 @@ func BenchmarkStdMapUpsert100k(b *testing.B) {
 
 func BenchmarkMapUpsertIncrement(b *testing.B) {
 	m, keys := initMapAndKeys(100000, 64<<10)
-	update := func(val *MyValue) {
+	update := func(val *MyValue, exists bool) {
 		val.v1++
 	}
 	b.ResetTimer()
@@ -280,7 +280,7 @@ func BenchmarkStdMapUpsertIncrement(b *testing.B) {
 
 func BenchmarkMapUpsertDelete(b *testing.B) {
 	m, keys := initMapAndKeys(100000, 128<<10)
-	update := func(val *MyValue) {
+	update := func(val *MyValue, exists bool) {
 		val.v1++
 	}
 
@@ -316,7 +316,7 @@ func initMapAndKeys(size, bucketsSize int) (*genmap.Map[string, MyValue], []stri
 	for i := 0; i < size; i++ {
 		v := rand.Int()
 		k := strconv.Itoa(v)
-		m.Upsert(k, func(val *MyValue) {
+		m.Upsert(k, func(val *MyValue, exists bool) {
 			val.v1 = v
 		})
 		keys[i] = k
@@ -340,13 +340,13 @@ func initStdMapAndKeys(size int) (map[string]MyValue, []string) {
 
 func TestMapIterator(t *testing.T) {
 	m := genmap.NewMap[int, string](genmap.Equal[int], genmap.NewHasher[int]())
-	m.Upsert(1, func(val *string) {
+	m.Upsert(1, func(val *string, exists bool) {
 		*val = "one"
 	})
-	m.Upsert(2, func(val *string) {
+	m.Upsert(2, func(val *string, exists bool) {
 		*val = "two"
 	})
-	m.Upsert(3, func(val *string) {
+	m.Upsert(3, func(val *string, exists bool) {
 		*val = "three"
 	})
 
