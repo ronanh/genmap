@@ -32,8 +32,8 @@ m.Put(MyKey{2, []string{"c", "d"}}, MyValue{2, "b"})
 m.Put(MyKey{1, []string{"a", "b"}}, MyValue{3, "c"})
 
 // increment the value for a key
-m.Upsert(MyKey{1, []string{"a", "b"}}, func(v *MyValue) {
-	v.v1++
+m.Upsert(MyKey{1, []string{"a", "b"}}, func(elem *genmap.MapElement[MyKey, MyValue], exists bool) {
+	elem.Value.v1++
 })
 
 // Get the value for a key
