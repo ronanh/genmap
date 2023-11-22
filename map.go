@@ -46,6 +46,9 @@ func NewMap[K any, V any](equal func(k1, k2 K) bool, hash func(k K) uint64, buck
 
 // returns the number of elements in the map.
 func (m *Map[K, V]) Len() int {
+	if m == nil {
+		return 0
+	}
 	return m.len
 }
 
@@ -59,6 +62,9 @@ func (m *Map[K, V]) Clear() {
 
 // returns the value associated with the given key.
 func (m *Map[K, V]) Get(key K) (V, bool) {
+	if m == nil {
+		return *new(V), false
+	}
 	hash := m.hash(key)
 	bucketID := hash % uint64(len(m.buckets))
 	bucket := m.buckets[bucketID]
@@ -260,6 +266,9 @@ type MapIterator[K any, V any] struct {
 
 // Next advances the iterator and returns true if there is another element
 func (it *MapIterator[K, V]) Next() bool {
+	if it.m == nil {
+		return false
+	}
 	if it.ready {
 		// ensure the cursor is moved
 		it.pos++
