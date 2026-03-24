@@ -134,47 +134,18 @@ func (m *Map[K, V]) Put(key K, val V) {
 	m.buckets[hash%uint64(len(m.buckets))] = bucket
 }
 
+func (m *Map[K, V]) Entry(key K) MaybeMapEntry[K, V] {
+	return makeOptionalEntry(m, key)
+}
+
 // Upsert inserts or modifies the given entry into the map.
 // The update function is called with the current value or the new one.
 func (m *Map[K, V]) Upsert(key K, update func(elem *MapElement[K, V], exists bool)) {
-	hash := m.hash(key)
-	bucket := m.buckets[hash%uint64(len(m.buckets))]
-	if len(bucket) > 0 {
-		if bucket[0].hash == hash && m.equal(bucket[0].Key, key) {
-			update(&bucket[0], true)
-			return
-		}
-		if len(bucket) > 1 {
-			// slow path
-			for pos := 1; pos < len(bucket); pos++ {
-				if bucket[pos].hash == hash && m.equal(bucket[pos].Key, key) {
-					update(&bucket[pos], true)
-					return
-				}
-			}
-		}
-	}
-	m.len++
-	if bucket == nil {
-		bucket = m.newElemSlice(0, 1)
-	}
-	if len(bucket)+1 <= cap(bucket) {
-		bucket = bucket[:len(bucket)+1]
-	} else {
-		if len(bucket) < 3 {
-			newBucket := m.newElemSlice(len(bucket)+1, 4)
-			copy(newBucket, bucket)
-			m.freeElemSlice(bucket)
-			bucket = newBucket
-		} else {
-			bucket = append(bucket, MapElement[K, V]{})
-		}
-	}
-	pos := uint64(len(bucket)-1) % uint64(len(bucket)) // Eliminate bounds check
-	bucket[pos].hash = hash
-	bucket[pos].Key = key
-	m.buckets[hash%uint64(len(m.buckets))] = bucket
-	update(&bucket[pos], false)
+	entry := m.Entry(key)
+	exists := entry.Exists()
+	entry.OrDefault().MutateWith(func(elem *MapElement[K, V]) {
+		update(elem, exists)
+	})
 }
 
 // Remove removes the given key from the map and returns it.
