@@ -134,6 +134,37 @@ func (m *Map[K, V]) Put(key K, val V) {
 	m.buckets[hash%uint64(len(m.buckets))] = bucket
 }
 
+// Entry returns a MaybeMapEntry that provides optional access to the element
+// associated with the given key. The returned entry can be inspected for
+// existence, read, mutated, or removed without performing multiple lookups.
+//
+// Example:
+//
+//	// Create a map with string keys and int values.
+//	m := genmap.NewMap[string, int](
+//	    func(a, b string) bool { return a == b },
+//	    func(s string) uint64 { return xxhash.Sum64String(s) },
+//	)
+//
+//	// Insert a value.
+//	m.Put("foo", 42)
+//
+//	// Obtain an entry for the key "foo".
+//	entry := m.Entry("foo")
+//
+//	if entry.Exists() {
+//	    // Read the value.
+//	    fmt.Println(entry.Get().Value) // Output: 42
+//
+//	    // Mutate the value in‑place.
+//	    entry.OrDefault().MutateWith(func(e *genmap.MapElement[string, int]) {
+//	        e.Value += 1 // now the value is 43
+//	    })
+//	}
+//
+//	// Remove the entry (optional, demonstrates that the map still works).
+//	removed, ok := m.Remove("foo")
+//	fmt.Println(removed, ok) // Output: {foo 43 0} true
 func (m *Map[K, V]) Entry(key K) MaybeMapEntry[K, V] {
 	return makeOptionalEntry(m, key)
 }
