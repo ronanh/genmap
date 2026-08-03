@@ -442,6 +442,51 @@ func TestMapIterator(t *testing.T) {
 	}
 }
 
+// TestMapIteratorAfterBucketShrink pins the invariant that the iterator yields
+// exactly the elements the map holds, no more. Removing enough elements from a
+// bucket makes remove() reallocate it smaller; sizing that replacement by
+// capacity rather than by length leaves the tail filled with zero-valued
+// MapElements, which the iterator then reports as if they were real entries.
+func TestMapIteratorAfterBucketShrink(t *testing.T) {
+	// One bucket makes every key collide, so the removals below are certain to
+	// drive a bucket's length far enough under its capacity to trigger a shrink.
+	m := genmap.NewMap[int, int](genmap.Equal[int], genmap.NewHasher[int](), 1)
+
+	const nbInserted, nbRemoved = 16, 13
+	for k := 0; k < nbInserted; k++ {
+		m.Upsert(k, func(elem *genmap.MapElement[int, int], exists bool) {
+			elem.Value = k + 1 // never zero, so a zero value marks a phantom
+		})
+	}
+	for k := 0; k < nbRemoved; k++ {
+		m.Remove(k)
+	}
+
+	want := make(map[int]int, nbInserted-nbRemoved)
+	for k := nbRemoved; k < nbInserted; k++ {
+		want[k] = k + 1
+	}
+
+	if m.Len() != len(want) {
+		t.Errorf("expected map with %d elements, got %d elements", len(want), m.Len())
+	}
+
+	got := make(map[int]int, len(want))
+	var nbIt int
+	it := m.Iterator()
+	for it.Next() {
+		nbIt++
+		got[it.Cur().Key] = it.Cur().Value
+	}
+
+	if nbIt != len(want) {
+		t.Errorf("Expected %d iterations, got %d", len(want), nbIt)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Expected iterator to yield %v, got %v", want, got)
+	}
+}
+
 func BenchmarkMapIterator(b *testing.B) {
 	m, _ := initMapAndKeys(100000, 64<<10)
 	it := m.Iterator()

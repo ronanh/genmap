@@ -216,8 +216,12 @@ func (m *Map[K, V]) remove(bucketID uint64, pos uint64) (elem MapElement[K, V]) 
 		m.buckets[bucketID%uint64(len(m.buckets))] = nil
 		return
 	} else if len(bucket)+1 < cap(bucket)/3 {
-		// shrink the bucket
-		newBucket := make([]MapElement[K, V], cap(bucket)/2)
+		// Shrink the bucket. The new slice must keep the bucket's *length* and
+		// only give up capacity: sizing it by capacity would pad the tail with
+		// zero-valued elements that Get/Put would scan and the iterator would
+		// yield as if they were real entries. The branch condition guarantees
+		// len(bucket) < cap(bucket)/3-1, so the smaller capacity always fits.
+		newBucket := make([]MapElement[K, V], len(bucket), cap(bucket)/2)
 		copy(newBucket, bucket)
 		bucket = newBucket
 	}
