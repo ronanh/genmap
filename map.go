@@ -59,6 +59,9 @@ func (m *Map[K, V]) Len() int {
 
 // Clear removes all elements from the map.
 func (m *Map[K, V]) Clear() {
+	if m == nil {
+		return
+	}
 	for i := range m.buckets {
 		m.buckets[i] = nil
 	}
@@ -182,6 +185,9 @@ func (m *Map[K, V]) Upsert(key K, update func(elem *MapElement[K, V], exists boo
 
 // Remove removes the given key from the map and returns it.
 func (m *Map[K, V]) Remove(key K) (MapElement[K, V], bool) {
+	if m == nil {
+		return MapElement[K, V]{}, false
+	}
 	hash := m.hash(key)
 	bucketID := hash % uint64(len(m.buckets))
 	bucket := m.buckets[bucketID]

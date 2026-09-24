@@ -227,6 +227,25 @@ func TestMapPutCollidingKeys(t *testing.T) {
 	}
 }
 
+func TestNilMap(t *testing.T) {
+	// Like a nil built-in map, a nil Map reads as empty and ignores removals.
+	var m *genmap.Map[int, int]
+	if m.Len() != 0 {
+		t.Errorf("expected empty map, got %d elements", m.Len())
+	}
+	if v, ok := m.Get(1); ok {
+		t.Errorf("expected no element with key 1, got %v", v)
+	}
+	if elem, ok := m.Remove(1); ok {
+		t.Errorf("expected nothing to remove for key 1, got %+v", elem)
+	}
+	m.Clear()
+	it := m.Iterator()
+	if it.Next() {
+		t.Errorf("expected the iterator to yield nothing, got %+v", it.Cur())
+	}
+}
+
 func TestMapWithZeroBucketSize(t *testing.T) {
 	// Callers size maps from the expected number of keys, which can be 0.
 	m := genmap.NewMap[int, int](genmap.Equal[int], identityHash, 0)
