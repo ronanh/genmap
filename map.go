@@ -27,6 +27,7 @@ type Map[K, V any] struct {
 // If not provided, a default bucket size (64k) is used.
 // Special care should be taken when choosing a bucket size as it can have a significant impact on performance.
 // For good performance, the bucket size should be close to the expected number of elements in the map.
+// A bucket size of 0 is treated as 1.
 func NewMap[K any, V any](equal func(k1, k2 K) bool, hash func(k K) uint64, bucketSizeOpt ...int) *Map[K, V] {
 	if len(bucketSizeOpt) > 1 {
 		panic("too many arguments")
@@ -34,6 +35,10 @@ func NewMap[K any, V any](equal func(k1, k2 K) bool, hash func(k K) uint64, buck
 	bucketsSize := 64 << 10
 	if len(bucketSizeOpt) == 1 {
 		bucketsSize = bucketSizeOpt[0]
+	}
+	if bucketsSize == 0 {
+		// every key needs a bucket to go to
+		bucketsSize = 1
 	}
 
 	bucket := &Map[K, V]{

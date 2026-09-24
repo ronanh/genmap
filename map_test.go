@@ -227,6 +227,14 @@ func TestMapPutCollidingKeys(t *testing.T) {
 	}
 }
 
+func TestMapWithZeroBucketSize(t *testing.T) {
+	// Callers size maps from the expected number of keys, which can be 0.
+	m := genmap.NewMap[int, int](genmap.Equal[int], identityHash, 0)
+	m.Put(1, 10)
+	m.Put(2, 20)
+	assertMapContent(t, m, map[int]int{1: 10, 2: 20}, 3)
+}
+
 // TestMapMatchesBuiltinMap applies the same random operations to a Map and to
 // a built-in map and checks after each step that both hold the same entries.
 // Few buckets and a small key space force collisions, overwrites and removals,
