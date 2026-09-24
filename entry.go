@@ -69,7 +69,9 @@ func (entry *MaybeMapEntry[K, V]) Exists() bool {
 
 // OrDefault returns a concrete `MapEntry`.  If the element already exists it
 // is returned unchanged; otherwise a new element is allocated, inserted into
-// the appropriate bucket, and a handle to that new element is returned.
+// the appropriate bucket, and a handle to that new element is returned.  The
+// entry then refers to the new element, so calling OrDefault again does not
+// insert the key a second time.
 func (entry *MaybeMapEntry[K, V]) OrDefault() MapEntry[K, V] {
 	if entry.elem != nil {
 		return MapEntry[K, V]{entry.elem}
@@ -109,5 +111,7 @@ func (entry *MaybeMapEntry[K, V]) OrDefault() MapEntry[K, V] {
 
 	// Write the bucket back to the map's bucket array
 	m.buckets[hash%uint64(len(m.buckets))] = bucket
-	return MapEntry[K, V]{&bucket[pos]}
+	// The entry now refers to the inserted element
+	entry.elem = &bucket[pos]
+	return MapEntry[K, V]{entry.elem}
 }

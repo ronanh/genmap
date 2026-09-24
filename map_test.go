@@ -196,6 +196,49 @@ func TestMapUpsert(t *testing.T) {
 	}
 }
 
+func TestMapEntry(t *testing.T) {
+	m := genmap.NewMap[string, int](genmap.Equal[string], genmap.NewHasher[string]())
+	m.Put("a", 1)
+	increment := func(elem *genmap.MapElement[string, int]) { elem.Value++ }
+
+	existing := m.Entry("a")
+	if !existing.Exists() {
+		t.Error("expected the entry for 'a' to exist")
+	}
+	existing.OrDefault().MutateWith(increment)
+
+	missing := m.Entry("b")
+	if missing.Exists() {
+		t.Error("expected the entry for 'b' not to exist")
+	}
+	missing.OrDefault().MutateWith(increment)
+	if !missing.Exists() {
+		t.Error("expected the entry for 'b' to exist once OrDefault inserted it")
+	}
+	// the entry now refers to the inserted element: no second insertion
+	missing.OrDefault().MutateWith(increment)
+
+	assertStringMapContent(t, m, map[string]int{"a": 2, "b": 2})
+}
+
+func assertStringMapContent(t *testing.T, m *genmap.Map[string, int], want map[string]int) {
+	t.Helper()
+	if m.Len() != len(want) {
+		t.Errorf("expected map with %d elements, got %d elements", len(want), m.Len())
+	}
+	got := make(map[string]int, len(want))
+	it := m.Iterator()
+	for it.Next() {
+		if _, dup := got[it.Cur().Key]; dup {
+			t.Errorf("iterator yielded key %q twice", it.Cur().Key)
+		}
+		got[it.Cur().Key] = it.Cur().Value
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("expected iterator to yield %v, got %v", want, got)
+	}
+}
+
 func identityHash(k int) uint64 { return uint64(k) }
 
 func TestMapPutCollidingKeys(t *testing.T) {
