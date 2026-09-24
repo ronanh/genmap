@@ -98,7 +98,8 @@ func (m *Map[K, V]) Get(key K) (V, bool) {
 // Put inserts the given key-value pair into the map.
 func (m *Map[K, V]) Put(key K, val V) {
 	hash := m.hash(key)
-	bucket := m.buckets[hash%uint64(len(m.buckets))]
+	bucketPos := hash % uint64(len(m.buckets))
+	bucket := m.buckets[bucketPos]
 	if len(bucket) > 0 {
 		if bucket[0].hash == hash && m.equal(bucket[0].Key, key) {
 			bucket[0].Value = val
@@ -114,28 +115,31 @@ func (m *Map[K, V]) Put(key K, val V) {
 			}
 		}
 	}
+	m.insert(bucketPos, hash, key).Value = val
+}
+
+// insert appends an element for key, which must not be in the map, to the
+// bucket at bucketPos, and returns it with a zero value.
+func (m *Map[K, V]) insert(bucketPos, hash uint64, key K) *MapElement[K, V] {
 	m.len++
+	bucket := m.buckets[bucketPos]
 	if bucket == nil {
 		bucket = m.newElemSlice(0, 1)
 	}
-	if len(bucket)+1 > cap(bucket) {
-		if len(bucket) < 3 {
-			newBucket := m.newElemSlice(len(bucket)+1, 4)
-			copy(newBucket, bucket)
-			m.freeElemSlice(bucket)
-			bucket = newBucket
-		} else {
-			bucket = append(bucket, MapElement[K, V]{})
-		}
-	} else {
+	// Make room for the new element, reusing capacity when possible
+	if len(bucket) < cap(bucket) {
 		bucket = bucket[:len(bucket)+1]
+	} else if len(bucket) < 3 {
+		newBucket := m.newElemSlice(len(bucket)+1, 4)
+		copy(newBucket, bucket)
+		m.freeElemSlice(bucket)
+		bucket = newBucket
+	} else {
+		bucket = append(bucket, MapElement[K, V]{})
 	}
-	bucket[len(bucket)-1] = MapElement[K, V]{
-		Key:   key,
-		Value: val,
-		hash:  hash,
-	}
-	m.buckets[hash%uint64(len(m.buckets))] = bucket
+	bucket[len(bucket)-1] = MapElement[K, V]{Key: key, hash: hash}
+	m.buckets[bucketPos] = bucket
+	return &bucket[len(bucket)-1]
 }
 
 // Entry returns a MaybeMapEntry that provides optional access to the element

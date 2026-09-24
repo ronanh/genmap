@@ -73,45 +73,9 @@ func (entry *MaybeMapEntry[K, V]) Exists() bool {
 // entry then refers to the new element, so calling OrDefault again does not
 // insert the key a second time.
 func (entry *MaybeMapEntry[K, V]) OrDefault() MapEntry[K, V] {
-	if entry.elem != nil {
-		return MapEntry[K, V]{entry.elem}
+	if entry.elem == nil {
+		// The entry now refers to the inserted element
+		entry.elem = entry.m.insert(entry.bucketPos, entry.hash, entry.key)
 	}
-
-	m := entry.m
-	bucketPos := entry.bucketPos
-	hash := entry.hash
-	key := entry.key
-	bucket := m.buckets[bucketPos]
-
-	// Grow the map length to account for the new element
-	m.len++
-
-	// Ensure the bucket slice exists
-	if bucket == nil {
-		bucket = m.newElemSlice(0, 1)
-	}
-	// Make room for the new element, reusing capacity when possible
-	if len(bucket)+1 <= cap(bucket) {
-		bucket = bucket[:len(bucket)+1]
-	} else {
-		if len(bucket) < 3 {
-			newBucket := m.newElemSlice(len(bucket)+1, 4)
-			copy(newBucket, bucket)
-			m.freeElemSlice(bucket)
-			bucket = newBucket
-		} else {
-			bucket = append(bucket, MapElement[K, V]{})
-		}
-	}
-	// Insert the new element at the end of the bucket (modulo length to
-	// avoid bounds checks)
-	pos := uint64(len(bucket)-1) % uint64(len(bucket))
-	bucket[pos].hash = hash
-	bucket[pos].Key = key
-
-	// Write the bucket back to the map's bucket array
-	m.buckets[hash%uint64(len(m.buckets))] = bucket
-	// The entry now refers to the inserted element
-	entry.elem = &bucket[pos]
 	return MapEntry[K, V]{entry.elem}
 }
