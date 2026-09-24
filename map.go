@@ -117,19 +117,15 @@ func (m *Map[K, V]) Put(key K, val V) {
 			m.freeElemSlice(bucket)
 			bucket = newBucket
 		} else {
-			bucket = append(bucket, MapElement[K, V]{
-				Key:   key,
-				Value: val,
-				hash:  hash,
-			})
+			bucket = append(bucket, MapElement[K, V]{})
 		}
 	} else {
 		bucket = bucket[:len(bucket)+1]
-		bucket[len(bucket)-1] = MapElement[K, V]{
-			Key:   key,
-			Value: val,
-			hash:  hash,
-		}
+	}
+	bucket[len(bucket)-1] = MapElement[K, V]{
+		Key:   key,
+		Value: val,
+		hash:  hash,
 	}
 	m.buckets[hash%uint64(len(m.buckets))] = bucket
 }

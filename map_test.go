@@ -196,6 +196,114 @@ func TestMapUpsert(t *testing.T) {
 	}
 }
 
+func identityHash(k int) uint64 { return uint64(k) }
+
+func TestMapPutCollidingKeys(t *testing.T) {
+	// One bucket makes every key collide, so every Put after the first one
+	// has to grow the bucket.
+	m := genmap.NewMap[int, string](genmap.Equal[int], identityHash, 1)
+	m.Put(1, "one")
+	m.Put(2, "two")
+	m.Put(3, "three")
+	m.Put(4, "four")
+	m.Put(5, "five")
+
+	want := map[int]string{1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+	if m.Len() != len(want) {
+		t.Errorf("expected map with %d elements, got %d elements", len(want), m.Len())
+	}
+	for k, v := range want {
+		if got, ok := m.Get(k); !ok || got != v {
+			t.Errorf("expected value %q for key %d, got %q (found: %v)", v, k, got, ok)
+		}
+	}
+	got := make(map[int]string, len(want))
+	it := m.Iterator()
+	for it.Next() {
+		got[it.Cur().Key] = it.Cur().Value
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("expected iterator to yield %v, got %v", want, got)
+	}
+}
+
+// TestMapMatchesBuiltinMap applies the same random operations to a Map and to
+// a built-in map and checks after each step that both hold the same entries.
+// Few buckets and a small key space force collisions, overwrites and removals,
+// so bucket growth, shrinking and slice reuse all get exercised.
+func TestMapMatchesBuiltinMap(t *testing.T) {
+	const nbKeys, nbSteps = 64, 3000
+	for _, nbBuckets := range []int{1, 3, 16} {
+		t.Run(strconv.Itoa(nbBuckets)+"-buckets", func(t *testing.T) {
+			rnd := rand.New(rand.NewSource(int64(nbBuckets)))
+			m := genmap.NewMap[int, int](genmap.Equal[int], identityHash, nbBuckets)
+			want := make(map[int]int)
+			for step := 0; step < nbSteps; step++ {
+				k := rnd.Intn(nbKeys)
+				switch op := rnd.Intn(10); {
+				case op < 4:
+					m.Put(k, step)
+					want[k] = step
+				case op < 6:
+					m.Upsert(k, func(elem *genmap.MapElement[int, int], exists bool) {
+						elem.Value++
+					})
+					want[k]++
+				case op < 9:
+					elem, ok := m.Remove(k)
+					wantV, wantOK := want[k]
+					if ok != wantOK || ok && (elem.Key != k || elem.Value != wantV) {
+						t.Fatalf("step %d: Remove(%d) = %+v, %v; want value %d, %v", step, k, elem, ok, wantV, wantOK)
+					}
+					delete(want, k)
+				default:
+					// remove about half of the entries through the iterator
+					it := m.Iterator()
+					for it.Next() {
+						if rnd.Intn(2) == 0 {
+							elem := it.Remove()
+							if wantV, ok := want[elem.Key]; !ok || elem.Value != wantV {
+								t.Fatalf("step %d: iterator removed %+v, want value %d (present: %v)", step, elem, wantV, ok)
+							}
+							delete(want, elem.Key)
+						}
+					}
+				}
+				assertMapContent(t, m, want, nbKeys)
+				if t.Failed() {
+					t.Fatalf("map diverged at step %d", step)
+				}
+			}
+		})
+	}
+}
+
+// assertMapContent checks that m holds exactly the entries of want, through
+// Len, Get on every key in [0, nbKeys) and a full iteration.
+func assertMapContent(t *testing.T, m *genmap.Map[int, int], want map[int]int, nbKeys int) {
+	t.Helper()
+	if m.Len() != len(want) {
+		t.Errorf("expected map with %d elements, got %d elements", len(want), m.Len())
+	}
+	for k := 0; k < nbKeys; k++ {
+		got, ok := m.Get(k)
+		if wantV, wantOK := want[k]; ok != wantOK || got != wantV {
+			t.Errorf("Get(%d) = %d, %v; want %d, %v", k, got, ok, wantV, wantOK)
+		}
+	}
+	got := make(map[int]int, len(want))
+	it := m.Iterator()
+	for it.Next() {
+		if _, dup := got[it.Cur().Key]; dup {
+			t.Errorf("iterator yielded key %d twice", it.Cur().Key)
+		}
+		got[it.Cur().Key] = it.Cur().Value
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("expected iterator to yield %v, got %v", want, got)
+	}
+}
+
 func BenchmarkMapPut100k(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
