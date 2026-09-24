@@ -1,16 +1,17 @@
-// Package genmap provides a simple generic hash‑map implementation that
-// operates directly on slices of buckets.  This file defines the entry
-// abstractions used to access and optionally create map elements.
+// Package genmap provides a simple generic hash map implementation that
+// accepts keys of any type, given an equality and a hash function.  This file
+// defines the entry abstractions used to access and optionally create map
+// elements.
 //
 // The map stores its data in a slice of buckets (`[][]MapElement[K,V]`).  Each
-// bucket holds one or more `MapElement`s that share the same hash value
-// (collision handling via chaining).  `MapEntry` is a thin wrapper around a
-// pointer to an existing element, while `MaybeMapEntry` represents a lookup
-// that may or may not have found an element.  The latter can be turned into a
-// concrete entry (creating a new element if necessary) via `OrDefault`.
+// bucket holds the elements whose hash maps to it (collision handling via
+// chaining).  `MapEntry` is a thin wrapper around a pointer to an existing
+// element, while `MaybeMapEntry` represents a lookup that may or may not have
+// found an element.  The latter can be turned into a concrete entry (creating
+// a new element if necessary) via `OrDefault`.
 //
-// These helpers are used by the public `Map` API (e.g. `Get`, `Set`, `Delete`)
-// to provide a convenient, zero‑allocation way to mutate entries in place.
+// These helpers back `Map.Entry` and `Map.Upsert`, which update an element in
+// place with a single lookup.
 package genmap
 
 // MapEntry is a lightweight handle to an existing map element.  It does not
@@ -69,45 +70,13 @@ func (entry *MaybeMapEntry[K, V]) Exists() bool {
 
 // OrDefault returns a concrete `MapEntry`.  If the element already exists it
 // is returned unchanged; otherwise a new element is allocated, inserted into
-// the appropriate bucket, and a handle to that new element is returned.
+// the appropriate bucket, and a handle to that new element is returned.  The
+// entry then refers to the new element, so calling OrDefault again does not
+// insert the key a second time.
 func (entry *MaybeMapEntry[K, V]) OrDefault() MapEntry[K, V] {
-	if entry.elem != nil {
-		return MapEntry[K, V]{entry.elem}
+	if entry.elem == nil {
+		// The entry now refers to the inserted element
+		entry.elem = entry.m.insert(entry.bucketPos, entry.hash, entry.key)
 	}
-
-	m := entry.m
-	bucketPos := entry.bucketPos
-	hash := entry.hash
-	key := entry.key
-	bucket := m.buckets[bucketPos]
-
-	// Grow the map length to account for the new element
-	m.len++
-
-	// Ensure the bucket slice exists
-	if bucket == nil {
-		bucket = m.newElemSlice(0, 1)
-	}
-	// Make room for the new element, reusing capacity when possible
-	if len(bucket)+1 <= cap(bucket) {
-		bucket = bucket[:len(bucket)+1]
-	} else {
-		if len(bucket) < 3 {
-			newBucket := m.newElemSlice(len(bucket)+1, 4)
-			copy(newBucket, bucket)
-			m.freeElemSlice(bucket)
-			bucket = newBucket
-		} else {
-			bucket = append(bucket, MapElement[K, V]{})
-		}
-	}
-	// Insert the new element at the end of the bucket (modulo length to
-	// avoid bounds checks)
-	pos := uint64(len(bucket)-1) % uint64(len(bucket))
-	bucket[pos].hash = hash
-	bucket[pos].Key = key
-
-	// Write the bucket back to the map's bucket array
-	m.buckets[hash%uint64(len(m.buckets))] = bucket
-	return MapEntry[K, V]{&bucket[pos]}
+	return MapEntry[K, V]{entry.elem}
 }

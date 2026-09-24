@@ -35,7 +35,7 @@ func Equal[K comparable](k1, k2 K) bool {
 	return k1 == k2
 }
 
-// Hasher Returns a hash function for `comparable`
+// NewHasher Returns a hash function for `comparable`
 func NewHasher[T comparable]() func(T) uint64 {
 	mh := maphash.NewHasher[T]()
 	return mh.Hash
