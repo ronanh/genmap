@@ -1,7 +1,8 @@
 package genmap
 
 const (
-	maxFreeSlices = 128
+	maxFreeSlices   = 128
+	allocBufferSize = 1024
 )
 
 // MapElement is a generic key-value pair used in the Map[K, V] implementation.
@@ -255,15 +256,19 @@ func (m *Map[K, V]) Iterator() *MapIterator[K, V] {
 	return &MapIterator[K, V]{m: m}
 }
 
+// newElemSlice returns a slice of size zeroed elements with room for at least
+// capacity elements, reusing the last freed slice when it is large enough.
 func (m *Map[K, V]) newElemSlice(size, capacity int) []MapElement[K, V] {
-	if len(m.freeSlices) > 0 && len(m.freeSlices[len(m.freeSlices)-1]) >= size {
-		last := len(m.freeSlices) - 1
-		slice := m.freeSlices[last]
+	if last := len(m.freeSlices) - 1; last >= 0 && cap(m.freeSlices[last]) >= capacity {
+		slice := m.freeSlices[last][:size]
 		m.freeSlices = m.freeSlices[:last]
 		return slice
 	}
+	if capacity > allocBufferSize {
+		return make([]MapElement[K, V], size, capacity)
+	}
 	if len(m.allocBuffer) < capacity {
-		m.allocBuffer = make([]MapElement[K, V], 1024)
+		m.allocBuffer = make([]MapElement[K, V], allocBufferSize)
 	}
 	last := len(m.allocBuffer) - capacity
 	slice := m.allocBuffer[last : last+size : last+capacity]
