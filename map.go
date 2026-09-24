@@ -65,6 +65,10 @@ func (m *Map[K, V]) Clear() {
 	for i := range m.buckets {
 		m.buckets[i] = nil
 	}
+	// The allocator's slices share backing arrays with the dropped buckets,
+	// and would keep their keys and values reachable
+	m.allocBuffer = nil
+	m.freeSlices = nil
 	m.len = 0
 }
 
@@ -135,7 +139,13 @@ func (m *Map[K, V]) insert(bucketPos, hash uint64, key K) *MapElement[K, V] {
 		m.freeElemSlice(bucket)
 		bucket = newBucket
 	} else {
-		bucket = append(bucket, MapElement[K, V]{})
+		newBucket := append(bucket, MapElement[K, V]{})
+		// Clear the old slice: it can share its backing array with other
+		// buckets, which would keep these keys and values reachable
+		for i := range bucket {
+			bucket[i] = MapElement[K, V]{}
+		}
+		bucket = newBucket
 	}
 	bucket[len(bucket)-1] = MapElement[K, V]{Key: key, hash: hash}
 	m.buckets[bucketPos] = bucket

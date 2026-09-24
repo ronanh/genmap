@@ -3,8 +3,10 @@ package genmap_test
 import (
 	"math/rand"
 	"reflect"
+	"runtime"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/ronanh/genmap"
 )
@@ -287,6 +289,74 @@ func TestNilMap(t *testing.T) {
 	if it.Next() {
 		t.Errorf("expected the iterator to yield nothing, got %+v", it.Cur())
 	}
+}
+
+// TestMapReleasesRemovedValues checks that the map does not keep removed or
+// cleared values reachable, which would stop the garbage collector from
+// freeing them for as long as the map lives.
+func TestMapReleasesRemovedValues(t *testing.T) {
+	type value struct{ _ [64]byte }
+	tests := []struct {
+		name string
+		drop func(m *genmap.Map[int, *value], v *value)
+	}{
+		{
+			name: "removed",
+			drop: func(m *genmap.Map[int, *value], v *value) {
+				m.Put(0, v)
+				m.Put(1, new(value))
+				m.Remove(0)
+			},
+		},
+		{
+			name: "removed after its bucket outgrew 4 elements",
+			drop: func(m *genmap.Map[int, *value], v *value) {
+				m.Put(0, v)
+				for k := 1; k <= 4; k++ {
+					m.Put(k, new(value))
+				}
+				m.Remove(0)
+			},
+		},
+		{
+			name: "cleared",
+			drop: func(m *genmap.Map[int, *value], v *value) {
+				m.Put(0, v)
+				m.Clear()
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// One bucket, so all the keys share it.
+			m := genmap.NewMap[int, *value](genmap.Equal[int], identityHash, 1)
+			released := make(chan struct{})
+			v := new(value)
+			runtime.SetFinalizer(v, func(*value) { close(released) })
+			tt.drop(m, v)
+			v = nil
+
+			if !isReleased(released) {
+				t.Error("expected the value to be garbage collected, but the map still references it")
+			}
+			// the map must outlive the check: the leak goes through the map
+			runtime.KeepAlive(m)
+		})
+	}
+}
+
+// isReleased runs the garbage collector until released is closed by a
+// finalizer, and gives up after about a second.
+func isReleased(released chan struct{}) bool {
+	for i := 0; i < 100; i++ {
+		runtime.GC()
+		select {
+		case <-released:
+			return true
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	return false
 }
 
 func TestMapWithZeroBucketSize(t *testing.T) {
