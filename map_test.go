@@ -595,6 +595,58 @@ func TestMapIteratorAfterBucketShrink(t *testing.T) {
 	}
 }
 
+func TestMapIteratorRemoveAfterMapChange(t *testing.T) {
+	// Removing a key through the map can leave the iterator positioned past
+	// the end of its bucket. it.Remove() must then panic, like it.Cur(), and
+	// leave the map untouched instead of removing some other key.
+	tests := []struct {
+		name       string
+		keys       []int
+		nbNext     int
+		removedKey int
+		want       map[int]int
+	}{
+		{
+			name:       "position past the end of the bucket",
+			keys:       []int{0, 1, 2},
+			nbNext:     3, // on key 2
+			removedKey: 0,
+			want:       map[int]int{1: 10, 2: 20},
+		},
+		{
+			name:       "bucket emptied",
+			keys:       []int{1},
+			nbNext:     1, // on key 1
+			removedKey: 1,
+			want:       map[int]int{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// One bucket, so the keys are stored in insertion order.
+			m := genmap.NewMap[int, int](genmap.Equal[int], identityHash, 1)
+			for _, k := range tt.keys {
+				m.Put(k, k*10)
+			}
+			it := m.Iterator()
+			for i := 0; i < tt.nbNext; i++ {
+				it.Next()
+			}
+			m.Remove(tt.removedKey)
+
+			func() {
+				defer func() {
+					if recover() == nil {
+						t.Error("expected it.Remove() to panic")
+					}
+				}()
+				it.Remove()
+			}()
+			assertMapContent(t, m, tt.want, 3)
+		})
+	}
+}
+
 func BenchmarkMapIterator(b *testing.B) {
 	m, _ := initMapAndKeys(100000, 64<<10)
 	it := m.Iterator()

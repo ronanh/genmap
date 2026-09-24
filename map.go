@@ -259,6 +259,11 @@ func (m *Map[K, V]) freeElemSlice(slice []MapElement[K, V]) {
 }
 
 // MapIterator is an iterator over a map.
+//
+// Keys added to the map during the iteration may or may not be visited.
+// Removing keys through the map rather than through MapIterator.Remove shifts
+// the elements of their bucket: the iterator can then skip an element, and Cur
+// and Remove panic if its position no longer holds one.
 type MapIterator[K any, V any] struct {
 	m      *Map[K, V]
 	mapPos uint64
@@ -289,9 +294,14 @@ func (it *MapIterator[K, V]) Next() bool {
 	return false
 }
 
+// valid reports whether the iterator position holds an element of the map.
+func (it *MapIterator[K, V]) valid() bool {
+	return it.ready && it.mapPos < uint64(len(it.m.buckets)) && it.pos < uint64(len(it.m.buckets[it.mapPos]))
+}
+
 // Cur returns the current element
 func (it *MapIterator[K, V]) Cur() *MapElement[K, V] {
-	if !it.ready || it.mapPos >= uint64(len(it.m.buckets)) || it.pos >= uint64(len(it.m.buckets[it.mapPos])) {
+	if !it.valid() {
 		panic("iterator position not set")
 	}
 	return &it.m.buckets[it.mapPos][it.pos]
@@ -300,7 +310,7 @@ func (it *MapIterator[K, V]) Cur() *MapElement[K, V] {
 // Remove removes the current element from the map and returns it.
 // After calling Remove, Next must be called before calling Cur again.
 func (it *MapIterator[K, V]) Remove() MapElement[K, V] {
-	if !it.ready {
+	if !it.valid() {
 		panic("iterator position not set")
 	}
 	it.ready = false
