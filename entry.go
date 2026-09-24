@@ -1,16 +1,17 @@
-// Package genmap provides a simple generic hash‑map implementation that
-// operates directly on slices of buckets.  This file defines the entry
-// abstractions used to access and optionally create map elements.
+// Package genmap provides a simple generic hash map implementation that
+// accepts keys of any type, given an equality and a hash function.  This file
+// defines the entry abstractions used to access and optionally create map
+// elements.
 //
 // The map stores its data in a slice of buckets (`[][]MapElement[K,V]`).  Each
-// bucket holds one or more `MapElement`s that share the same hash value
-// (collision handling via chaining).  `MapEntry` is a thin wrapper around a
-// pointer to an existing element, while `MaybeMapEntry` represents a lookup
-// that may or may not have found an element.  The latter can be turned into a
-// concrete entry (creating a new element if necessary) via `OrDefault`.
+// bucket holds the elements whose hash maps to it (collision handling via
+// chaining).  `MapEntry` is a thin wrapper around a pointer to an existing
+// element, while `MaybeMapEntry` represents a lookup that may or may not have
+// found an element.  The latter can be turned into a concrete entry (creating
+// a new element if necessary) via `OrDefault`.
 //
-// These helpers are used by the public `Map` API (e.g. `Get`, `Set`, `Delete`)
-// to provide a convenient, zero‑allocation way to mutate entries in place.
+// These helpers back `Map.Entry` and `Map.Upsert`, which update an element in
+// place with a single lookup.
 package genmap
 
 // MapEntry is a lightweight handle to an existing map element.  It does not

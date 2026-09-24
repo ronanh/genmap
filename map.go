@@ -24,11 +24,16 @@ type Map[K, V any] struct {
 }
 
 // NewMap returns a new instance of Map[K, V] with the given equality and hash functions.
-// The optional bucketSizeOpt parameter specifies the size of each bucket in the map.
+// The optional bucketSizeOpt parameter specifies the number of buckets in the map.
 // If not provided, a default bucket size (64k) is used.
 // Special care should be taken when choosing a bucket size as it can have a significant impact on performance.
 // For good performance, the bucket size should be close to the expected number of elements in the map.
 // A bucket size of 0 is treated as 1.
+//
+// The map never adds buckets. Each bucket costs a slice header (24 bytes on
+// 64-bit platforms) even when empty, and iterating over or clearing the map
+// visits every bucket: with the default size, a map takes 1.5 MB and iterating
+// over it scans 65,536 buckets, however few elements it holds.
 func NewMap[K any, V any](equal func(k1, k2 K) bool, hash func(k K) uint64, bucketSizeOpt ...int) *Map[K, V] {
 	if len(bucketSizeOpt) > 1 {
 		panic("too many arguments")
@@ -50,7 +55,7 @@ func NewMap[K any, V any](equal func(k1, k2 K) bool, hash func(k K) uint64, buck
 	return bucket
 }
 
-// returns the number of elements in the map.
+// Len returns the number of elements in the map.
 func (m *Map[K, V]) Len() int {
 	if m == nil {
 		return 0
@@ -73,7 +78,8 @@ func (m *Map[K, V]) Clear() {
 	m.len = 0
 }
 
-// returns the value associated with the given key.
+// Get returns the value associated with the given key, and whether the key is
+// in the map.
 func (m *Map[K, V]) Get(key K) (V, bool) {
 	if m == nil {
 		return *new(V), false
@@ -153,37 +159,10 @@ func (m *Map[K, V]) insert(bucketPos, hash uint64, key K) *MapElement[K, V] {
 	return &bucket[len(bucket)-1]
 }
 
-// Entry returns a MaybeMapEntry that provides optional access to the element
+// Entry returns a MaybeMapEntry that provides optional access to the element
 // associated with the given key. The returned entry can be inspected for
-// existence, read, mutated, or removed without performing multiple lookups.
-//
-// Example:
-//
-//	// Create a map with string keys and int values.
-//	m := genmap.NewMap[string, int](
-//	    func(a, b string) bool { return a == b },
-//	    func(s string) uint64 { return xxhash.Sum64String(s) },
-//	)
-//
-//	// Insert a value.
-//	m.Put("foo", 42)
-//
-//	// Obtain an entry for the key "foo".
-//	entry := m.Entry("foo")
-//
-//	if entry.Exists() {
-//	    // Read the value.
-//	    fmt.Println(entry.Get().Value) // Output: 42
-//
-//	    // Mutate the value in‑place.
-//	    entry.OrDefault().MutateWith(func(e *genmap.MapElement[string, int]) {
-//	        e.Value += 1 // now the value is 43
-//	    })
-//	}
-//
-//	// Remove the entry (optional, demonstrates that the map still works).
-//	removed, ok := m.Remove("foo")
-//	fmt.Println(removed, ok) // Output: {foo 43 0} true
+// existence, and its element updated or inserted, without performing multiple
+// lookups.
 func (m *Map[K, V]) Entry(key K) MaybeMapEntry[K, V] {
 	return makeOptionalEntry(m, key)
 }
